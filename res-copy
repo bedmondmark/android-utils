@@ -1,0 +1,179 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# pylint: disable-msg=C0103
+
+"""
+res-copy - A command-line tool for copying resources into an Android project.
+"""
+
+from __future__ import print_function
+
+import argparse
+import fnmatch
+import logging
+import os
+from os.path import join as join_path, basename, abspath
+import re
+import shutil
+import sys
+
+
+class UserException (Exception):
+    pass
+
+
+PIXEL_DENSITIES = ['xxhdpi', 'xhdpi', 'hdpi', 'mdpi', 'ldpi']
+FILENAME_DENSITY_RE = re.compile(
+    r'[-_ ]*\(?(?:xxhdpi|xhdpi|hdpi|mdpi|ldpi)\)?[-_ ]*',
+    re.IGNORECASE
+)
+SUPPORTED_EXTENSIONS = ['.png', '.jpg']
+NO_FOLLOWS = [".git", ".svn"]
+
+
+def _remove_nofollows(dirs):
+    """
+    MODIFIES provided dirs to remove all directory names in NO_FOLLOWS var.
+    """
+    for nofollow in NO_FOLLOWS:
+        if nofollow in dirs:
+            dirs.remove(nofollow)
+
+
+def _accepted_extension(filename):
+    """
+    Returns True if fn ends with one of the extensions in SUPPORTED_EXTENSIONS
+    """
+    for ext in SUPPORTED_EXTENSIONS:
+        if filename.endswith(ext):
+            return True
+    return False
+
+
+def _get_res(path):
+    """
+    Extract the pixel density from the provided 'path'.
+    """
+    for density in PIXEL_DENSITIES:
+        if density in path.lower():
+            return density
+
+
+def _fnmatch_multi(files, fileglobs):
+    """
+    Return all of the paths contained in 'files' that match one or moer of the
+    glob patterns contained in 'fileglobs'.
+
+    If 'fileglobs' is empty or None, all files are returned.
+    """
+    if fileglobs:
+        fileset = set()
+        fileset.update(
+            *[fnmatch.filter(files, fileglob) for fileglob in fileglobs])
+        return list(fileset)
+    return files
+
+
+def _matching_paths(path, files, fileglobs=None):
+    """
+    Given a path to a directory, a list of filenames in that directory, and
+    optionally a list of fileglob patterns, this function will yield 2-tuples
+    containing (absolute-path, pixel-density) for every matching file.
+    """
+    for filename in _fnmatch_multi(files, fileglobs):
+        if _accepted_extension(filename):
+            full_path = abspath(join_path(path, filename))
+            res = _get_res(full_path)
+            if res:
+                yield full_path, res
+
+
+def _find_candidates(root, fileglobs=None):
+    """
+    Find matching resources under the directory specified by 'root'.
+
+    Recurse through the files and directories under root, yielding 2-tuples
+    containing (file-path, pixel-density) for each resource, filtering by the
+    file patterns contained in the fileglobs iterable, if provided.
+    """
+    for path, dirs, files in os.walk(root):
+        _remove_nofollows(dirs)
+        for res in _matching_paths(path, files, fileglobs):
+            yield res
+
+
+def _yesno(msg):
+    """
+    Ask a 'yes/no' style question and insist on an acceptable answer.
+
+    Returns True if 'yes' and False if 'no'
+    """
+    res = raw_input('{msg} [Yn] > '.format(msg=msg))
+    while True:
+        if res.strip().lower() in ['y', 'yes', 'yo', 'yeah', 'yup']:
+            return True
+        elif res.strip().lower() in ['n', 'no', 'nein', 'narp', 'nah']:
+            return False
+        res = raw_input('[Yn] > ')
+
+
+def main(argv=sys.argv[1:]):
+    """
+    This is a main function. I am not going to document this for you.
+    """
+
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('srcroot')
+        parser.add_argument('destroot')
+        parser.add_argument('pattern', nargs='*')
+        parser.add_argument('-v', '--verbose', default=False,
+                            action='store_true')
+        parser.add_argument('-d', '--dry-run', default=False,
+                            action='store_true')
+        parser.add_argument('-f', '--force', default=False,
+                            action='store_true')
+
+        opts = parser.parse_args(argv)
+
+        logging.basicConfig(level=logging.INFO if opts.verbose else logging.WARN)
+
+        candidates = _find_candidates(opts.srcroot, opts.pattern)
+
+        # Check that srcroot exists
+        # Check that destroot exists
+
+        for src_path, res in candidates:
+            dest_filename = FILENAME_DENSITY_RE.sub('', basename(src_path))
+            dest_path = join_path(opts.destroot, res, dest_filename)
+            dest_dir = os.path.dirname(dest_path)
+            print("{res:<6} {src_path:<90} {dest}".format(
+                res=res,
+                src_path=src_path,
+                dest=dest_path
+            ))
+
+            # Check whether dest file exists (and if so, ask user,
+            # unless forced)
+            if (not os.path.exists(dest_path)
+                or opts.force
+                or _yesno(
+                    "Overwrite existing file {destfile} with {srcpath}".format(
+                        destfile=dest_path,
+                        srcpath=src_path,
+                    ))):
+                # Check to see if destination dir exists, and create if not:
+                if not os.path.isdir(dest_dir):
+                    os.makedirs(dest_dir)
+                shutil.copy2(src_path, dest_path)
+    except UserException as ue:
+        print(ue, file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        logging.info("res-copy cancelled")
+        return 130
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

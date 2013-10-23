@@ -1,0 +1,66 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+dippy - A tool for converting between dp and pixels at different resolutions.
+"""
+
+import re
+import sys
+
+
+_parser = re.compile(r'''
+                     ^
+                     (\d+(?:\.\d+)?)            # A number.
+                     \s*                        # Possible spaces
+                     ((?:x*h|m|l)dpi|di?p)s?    # x/h/m/ldpi or dip
+                     $
+                     ''',
+                     re.X)
+_dp_matcher = re.compile(r'di?ps?')
+
+dp_multiplier = {
+    'xxhdpi': 1.0 / 3.0,
+    'xhdpi':  0.5,
+    'hdpi':   2.0 / 3.0,
+    'mdpi':   1.0,
+    'ldpi':   4.0 / 3.0,
+    'dp':     1.0,
+}
+densities = ['xxhdpi', 'xhdpi', 'hdpi', 'mdpi', 'ldpi']
+
+
+def parse_distance(s):
+    match = _parser.match(s.lower().strip())
+    if match:
+        value, unit = match.groups()
+        if _dp_matcher.match(unit):
+            unit = 'dp'
+        return float(value), unit
+    return None, None
+
+
+def main(argv=sys.argv[1:]):
+    value, unit = parse_distance(' '.join(argv))
+    if value is not None:
+        dp_value = dp_multiplier[unit] * value
+        if unit != 'dp':
+            header = "{value} px ({unit}) = {dp} dp".format(
+                value=value, unit=unit, dp=dp_value)
+        else:
+            header = "{value} {unit}".format(
+                value=value, unit=unit)
+        print header
+        print '=' * len(header)
+        for density in densities:
+            print "{density:6} : {result} px".format(
+                density=density,
+                result=dp_value / dp_multiplier[density]
+            )
+
+    else:
+        print >> sys.stderr, "Couldn't understand your measurement! I only understand dp, dip, xxhdpi, xhdpi, hdpi, mdpi and ldpi!"
+
+
+if __name__ == '__main__':
+    main()
