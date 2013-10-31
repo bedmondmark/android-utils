@@ -1,0 +1,44 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+res-cmp - List files missing from one or more resource directories
+
+Usage: res-cmp res/drawable-*
+"""
+
+import argparse
+import os
+import sys
+
+
+def format_dirs(items):
+    """ Format a list of items with commas and 'and' in the right places. """
+    return ' and '.join([c for c in [', '.join(items[:-1]), items[-1]] if c])
+
+
+def main(argv=sys.argv[1:]):
+    result = 0
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dir')
+    parser.add_argument('otherdir', nargs='+')
+
+    opts = parser.parse_args(argv)
+    dirs = [opts.dir] + opts.otherdir
+    dir_contents = {d: set(os.listdir(d)) for d in dirs}
+    all_files = list(dir_contents.values())
+    all_files = sorted(all_files[0].union(*all_files[1:]))
+
+    for f in all_files:
+        missing = [(not os.path.exists(os.path.join(d, f))) for d in dirs]
+        if any(missing):
+            print '{} is missing in {}'.format(
+                f,
+                format_dirs([d[0] for d in zip(dirs, missing) if d[1]]))
+            result = 1
+    return result
+
+
+if __name__ == '__main__':
+    exit(main())
