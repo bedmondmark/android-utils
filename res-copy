@@ -145,7 +145,7 @@ def main(argv=sys.argv[1:]):
 
         for src_path, res in candidates:
             dest_filename = FILENAME_DENSITY_RE.sub('', basename(src_path))
-            dest_path = join_path(opts.destroot, res, dest_filename)
+            dest_path = join_path(opts.destroot, 'drawable-{}'.format(res), dest_filename)
             dest_dir = os.path.dirname(dest_path)
             print("{res:<6} {src_path:<90} {dest}".format(
                 res=res,
