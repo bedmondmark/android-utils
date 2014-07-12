@@ -130,7 +130,7 @@ def main(argv=sys.argv[1:]):
         parser.add_argument('-v', '--verbose', default=False,
                             action='store_true')
         parser.add_argument('-d', '--dry-run', default=False,
-                            action='store_true')
+                            action='store_true', help='WARNING - NOT IMPLEMENTED YET!')
         parser.add_argument('-f', '--force', default=False,
                             action='store_true')
 
